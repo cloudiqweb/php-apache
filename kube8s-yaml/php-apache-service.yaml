@@ -4,6 +4,7 @@ metadata:
   name: php-apache-service
   labels:
     name: php-apache-service
+    app: php-apache
 spec:
   ports:
   - name: root
