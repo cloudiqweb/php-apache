@@ -37,7 +37,7 @@ volumes:[
     stage ('Maven Build & Tests') {
 
       container ('maven') {
-		sh "./mvnw clean install"
+		sh "mvn install"
       }
 
     }
