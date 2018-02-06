@@ -20,7 +20,7 @@ podTemplate(label: 'mypod', containers: [
                         docker pull php-apache
                         docker tag php-apache ${env.DOCKER_HUB_USER}/php-apache:${env.BUILD_NUMBER}
                         """
-                    sh "docker login -u ${env.DOCKER_HUB_USER} -p ${env.DOCKER_HUB_PASSWORD} "
+                    sh "docker login cloudiqreg.azurecr.io -u ${env.DOCKER_HUB_USER} -p ${env.DOCKER_HUB_PASSWORD} "
                     sh "docker push ${env.DOCKER_HUB_USER}/php-apache:${env.BUILD_NUMBER} "
                 }
             }
