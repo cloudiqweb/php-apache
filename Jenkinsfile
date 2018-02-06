@@ -37,7 +37,8 @@ volumes:[
     stage ('Maven Build & Tests') {
 
       container ('maven') {
-		sh 'mvn -B clean install'
+		git 'https://github.com/jenkinsci/kubernetes-pipeline.git'
+		sh 'mvn clean install'
       }
 
     }
