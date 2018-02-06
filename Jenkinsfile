@@ -1,48 +1,111 @@
+#!/usr/bin/groovy
+
+// load pipeline functions
+// Requires pipeline-github-lib plugin to load library from github
+@Library('github.com/lachie83/jenkins-pipeline@master')
+def pipeline = new io.estrado.Pipeline()
+
 podTemplate(label: 'jenkins-pipeline', containers: [
-    containerTemplate(name: 'docker', image: 'docker', ttyEnabled: true, command: 'cat'),
-    containerTemplate(name: 'kubectl', image: 'lachlanevenson/k8s-kubectl:v1.8.0', command: 'cat', ttyEnabled: true),
-    containerTemplate(name: 'helm', image: 'lachlanevenson/k8s-helm:latest', command: 'cat', ttyEnabled: true)
-  ],
-  volumes: [
+    containerTemplate(name: 'jnlp', image: 'jenkinsci/jnlp-slave:2.62', args: '${computer.jnlpmac} ${computer.name}', workingDir: '/home/jenkins', resourceRequestCpu: '500m', resourceLimitCpu: '500m', resourceRequestMemory: '1024Mi', resourceLimitMemory: '1024Mi'),
+    containerTemplate(name: 'docker', image: 'docker:1.12.6', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'maven', image: 'maven:3.5.0-jdk-8', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'helm', image: 'lachlanevenson/k8s-helm:v2.6.1', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'kubectl', image: 'lachlanevenson/k8s-kubectl:v1.8.3', command: 'cat', ttyEnabled: true)
+],
+volumes:[
     hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
-  ]) {
-    node('jenkins-pipeline') {
+]){
 
-        stage('do some Docker work') {
-            container('docker') {
+  node ('jenkins-pipeline') {
 
-                withCredentials([[$class: 'UsernamePasswordMultiBinding', 
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_HUB_USER', 
-                        passwordVariable: 'DOCKER_HUB_PASSWORD']]) {
-                    
-                    sh """
-                        docker pull ubuntu
-                        docker tag ubuntu ${env.DOCKER_HUB_USER}/ubuntu:${env.BUILD_NUMBER}
-                        """
-                    sh "docker login cloudiqreg.azurecr.io -u ${env.DOCKER_HUB_USER} -p ${env.DOCKER_HUB_PASSWORD} "
-                    sh "docker push ${env.DOCKER_HUB_USER}/ubuntu:${env.BUILD_NUMBER} "
-                }
-            }
-        }
+    def pwd = pwd()
+    def chart_dir = "${pwd}/charts/hellojava"
+    def tags = [env.BUILD_TAG, 'latest']
+    def docker_registry_url = "DOCKER_REGISTRY"
+    def docker_email = "DOCKER_EMAIL"
+    def docker_repo = "hellojava"
+    def docker_acct = "kubernetes"
+    def jenkins_registry_cred_id = "acr_creds"
 
-        stage('do some kubectl work') {
-            container('kubectl') {
+    // checkout sources
+    checkout scm
 
-                withCredentials([[$class: 'UsernamePasswordMultiBinding', 
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_HUB_USER',
-                        passwordVariable: 'DOCKER_HUB_PASSWORD']]) {
-                    
-                    sh "kubectl get nodes"
-                }
-            }
-        }
-        stage('do some helm work') {
-            container('helm') {
+    // set additional git envvars for image tagging
+    pipeline.gitEnvVars()
 
-               sh "helm ls"
-            }
-        }
+    // Execute Maven build and tests
+    stage ('Maven Build & Tests') {
+
+      container ('maven') {
+        sh "mvn install"
+      }
+
     }
+
+    // Test Helm deployment (dry-run)
+    stage ('Helm test deployment') {
+
+      container('helm') {
+
+        // run helm chart linter
+        pipeline.helmLint(chart_dir)
+
+        // run dry-run helm chart installation
+        pipeline.helmDeploy(
+          dry_run       : true,
+          name          : "hello-java",
+          namespace     : "hello-java",
+          version_tag   : tags.get(0),
+          chart_dir     : chart_dir,
+          replicas      : 2,
+          cpu           : "10m",
+          memory        : "128Mi",
+          hostname      : "hellojava.k8s-engine.jcorioland.io"
+        )
+
+      }
+    }
+
+    // Build and push the Docker image
+    stage ('Build & Push Docker image') {
+
+      container('docker') {
+        println "build & push"
+
+        // perform docker login
+        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: jenkins_registry_cred_id, usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD']]) {
+          sh "docker login -e ${docker_email} -u ${env.USERNAME} -p ${env.PASSWORD} ${docker_registry_url}"
+        }
+
+        // build and publish container
+        pipeline.containerBuildPub(
+            dockerfile: "./",
+            host      : docker_registry_url,
+            acct      : docker_acct,
+            repo      : docker_repo,
+            tags      : tags,
+            auth_id   : jenkins_registry_cred_id
+        )
+      }
+    }
+    
+    // Deploy the new version to Kubernetes
+    stage ('Deploy to Kubernetes') {
+        container('helm') {
+
+          // Deploy using Helm chart
+           pipeline.helmDeploy(
+            dry_run       : false,
+            name          : "hello-java",
+            namespace     : "hello-java",
+            version_tag   : tags.get(0),
+            chart_dir     : chart_dir,
+            replicas      : 2,
+            cpu           : "10m",
+            memory        : "128Mi",
+            hostname      : "hellojava.k8s-engine.jcorioland.io"
+          )
+        }
+      }
+  }
 }
