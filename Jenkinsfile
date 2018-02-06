@@ -12,18 +12,16 @@ podTemplate(label: 'mypod', containers: [
             container('docker') {
 
                 withCredentials([[$class: 'UsernamePasswordMultiBinding', 
-                        credentialsId: 'cloudiqacr',
+                        credentialsId: 'dockerhub',
                         usernameVariable: 'DOCKER_HUB_USER', 
                         passwordVariable: 'DOCKER_HUB_PASSWORD']]) {
-						
-					sh "docker login cloudiqreg.azurecr.io -u ${env.DOCKER_HUB_USER} -p ${env.DOCKER_HUB_PASSWORD} "
                     
                     sh """
-                        docker pull php-apache
-                        docker tag php-apache ${env.DOCKER_HUB_USER}/php-apache:${env.BUILD_NUMBER}
+                        docker pull ubuntu
+                        docker tag ubuntu ${env.DOCKER_HUB_USER}/ubuntu:${env.BUILD_NUMBER}
                         """
-                    
-                    sh "docker push ${env.DOCKER_HUB_USER}/php-apache:${env.BUILD_NUMBER} "
+                    sh "docker login cloudiqreg.azurecr.io -u ${env.DOCKER_HUB_USER} -p ${env.DOCKER_HUB_PASSWORD} "
+                    sh "docker push ${env.DOCKER_HUB_USER}/ubuntu:${env.BUILD_NUMBER} "
                 }
             }
         }
@@ -32,7 +30,7 @@ podTemplate(label: 'mypod', containers: [
             container('kubectl') {
 
                 withCredentials([[$class: 'UsernamePasswordMultiBinding', 
-                        credentialsId: 'cloudiqacr',
+                        credentialsId: 'dockerhub',
                         usernameVariable: 'DOCKER_HUB_USER',
                         passwordVariable: 'DOCKER_HUB_PASSWORD']]) {
                     
