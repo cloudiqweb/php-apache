@@ -2,10 +2,11 @@ apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
   name: php-apache
+  namespace: php-apache
   labels:
     app: php-apache
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: php-apache
@@ -19,5 +20,10 @@ spec:
         image: cloudiqreg.azurecr.io/php-apache-sample
         ports:
         - containerPort: 80
+        resources:
+          requests:
+            cpu: 250m
+          limits:
+            cpu: 500m
       imagePullSecrets:
         - name: ciq-acr-config-secret
