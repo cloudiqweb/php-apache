@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: php-apache-service
+  labels:
+    name: php-apache-service
+    app: php-apache
+spec:
+  ports:
+  - name: root
+    port: 80
+    targetPort: 80
+  selector:
+    app: php-apache
+  type: LoadBalancer
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: php-apache
+  labels:
+    app: php-apache
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: php-apache
+  template:
+    metadata:
+      labels:
+        app: php-apache
+    spec:
+      containers:
+      - name: php-apache
+        image: cloudiqreg.azurecr.io/php-apache-sample
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 250m
+          limits:
+            cpu: 500m
+      imagePullSecrets:
+        - name: ciq-acr-config-secret
